@@ -1,7 +1,7 @@
 {
   "name": "rainbow-html",
   "displayName": "Rainbow HTML",
-  "description": "Alternating rainbow colors for HTML tag delimiters and names (foreground only).",
+  "description": "Alternating rainbow colors for HTML tag delimiters and names to enhance complex nested HTML readability.",
   "version": "0.0.3",
   "license": "MIT",
   "publisher": "wumbl3",
