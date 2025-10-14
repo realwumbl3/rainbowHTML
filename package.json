@@ -1,0 +1,44 @@
+{
+  "name": "rainbow-html",
+  "displayName": "Rainbow HTML",
+  "description": "Alternating rainbow colors for HTML tag delimiters and names (foreground only).",
+  "version": "0.0.2",
+  "license": "MIT",
+  "publisher": "wumbl3",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onLanguage:html",
+    "onLanguage:javascript",
+    "onLanguage:typescript",
+    "onLanguage:javascriptreact",
+    "onLanguage:typescriptreact",
+    "onLanguage:jsx",
+    "onStartupFinished"
+  ],
+  "main": "dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "rainbow-html.refresh",
+        "title": "Rainbow HTML: Refresh"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^18.19.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.6.2",
+    "typescript": "^5.3.3"
+  }
+}
