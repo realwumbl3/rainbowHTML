@@ -1,6 +1,6 @@
 # Rainbow HTML
 
-Alternating rainbow foreground colors for HTML tag delimiters and tag names. Attributes and values remain untouched (use your theme's colors). No background highlights.
+Alternating rainbow foreground colors for HTML tag delimiters and tag names. Attributes and values remain untouched (uses theme's colors).
 
 ## Features
 - Colors only `<`, `>`, optional `/`, and the tag name of each HTML element

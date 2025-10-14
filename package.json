@@ -2,7 +2,7 @@
   "name": "rainbow-html",
   "displayName": "Rainbow HTML",
   "description": "Alternating rainbow colors for HTML tag delimiters and names (foreground only).",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "license": "MIT",
   "publisher": "wumbl3",
   "engines": {

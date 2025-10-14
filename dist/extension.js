@@ -46,6 +46,7 @@ const RAINBOW_COLORS = [
 ];
 let activeEditor;
 let decorations = [];
+let delimiterDecorations = [];
 let updateTimer;
 function activate(context) {
     activeEditor = vscode.window.activeTextEditor;
@@ -71,7 +72,7 @@ function activate(context) {
         }
     }), vscode.workspace.onDidCloseTextDocument(() => {
         clearAllDecorations();
-    }), vscode.commands.registerCommand('rainbow-html-tags.refresh', () => triggerUpdateDecorations()));
+    }), vscode.commands.registerCommand('rainbow-html.refresh', () => triggerUpdateDecorations()));
 }
 function deactivate() {
     clearAllDecorations();
@@ -94,17 +95,32 @@ function initDecorations() {
         }),
         ranges: []
     }));
+    delimiterDecorations = RAINBOW_COLORS.map(color => ({
+        decorationType: vscode.window.createTextEditorDecorationType({
+            color,
+            opacity: '0.70',
+            rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed
+        }),
+        ranges: []
+    }));
 }
 function disposeDecorations() {
     for (const d of decorations) {
         d.decorationType.dispose();
     }
+    for (const d of delimiterDecorations) {
+        d.decorationType.dispose();
+    }
     decorations = [];
+    delimiterDecorations = [];
 }
 function clearAllDecorations() {
     if (!activeEditor)
         return;
     for (const d of decorations) {
+        activeEditor.setDecorations(d.decorationType, []);
+    }
+    for (const d of delimiterDecorations) {
         activeEditor.setDecorations(d.decorationType, []);
     }
 }
@@ -125,12 +141,16 @@ function updateDecorations() {
     // Reset ranges
     for (const d of decorations)
         d.ranges = [];
+    for (const d of delimiterDecorations)
+        d.ranges = [];
     const text = doc.getText();
     const segments = getProcessableSegments(doc, text);
     // Lightweight scanner that pairs tags so opening/closing share the same color
     const rawTextElements = new Set(['script', 'style']);
-    let colorIndex = 0;
+    // Track assigned color per open element and the next color to use per depth.
+    // nextIndexStack[depth] = next color index to try for the next sibling at that depth.
     const colorStack = [];
+    const nextIndexStack = [0];
     for (const seg of segments) {
         let pos = seg.start;
         let inComment = false;
@@ -193,7 +213,7 @@ function updateDecorations() {
                 const isSelfClosing = isSelfClosingSyntax || isVoid;
                 if (isClosing) {
                     // Match closing with the nearest same-name opening to get its color
-                    let matchedColor = colorIndex; // fallback
+                    let matchedColor = nextIndexStack[Math.max(0, colorStack.length)] ?? 0; // fallback
                     for (let i = colorStack.length - 1; i >= 0; i--) {
                         if (colorStack[i].name === tagName) {
                             matchedColor = colorStack[i].colorIndex;
@@ -201,17 +221,25 @@ function updateDecorations() {
                             break;
                         }
                     }
+                    // After popping, ensure depth-aligned next color stack length
+                    nextIndexStack.length = colorStack.length + 1;
                     addTagPieces(doc, pos, tagText, matchedColor);
                     pos = gt + 1;
                     continue;
                 }
                 else {
-                    // Assign a color, ensuring it differs from the immediate parent's color
-                    const parentColor = colorStack.length > 0 ? colorStack[colorStack.length - 1].colorIndex : null;
-                    const assigned = nextDifferentColor(colorIndex, parentColor);
+                    // Assign a color based on the next index at this depth, avoiding parent's color
+                    const depth = colorStack.length;
+                    const parentColor = depth > 0 ? colorStack[depth - 1].colorIndex : null;
+                    const startIndex = nextIndexStack[depth] ?? 0;
+                    const assigned = nextDifferentColor(startIndex, parentColor);
                     addTagPieces(doc, pos, tagText, assigned);
+                    // Update next color for this depth (next sibling) and prepare child depth baseline
+                    nextIndexStack[depth] = (assigned + 1) % RAINBOW_COLORS.length;
                     if (!isSelfClosing) {
                         colorStack.push({ name: tagName, colorIndex: assigned });
+                        // Ensure child depth starts from parent's next (skipping parent's color)
+                        nextIndexStack[depth + 1] = (assigned + 1) % RAINBOW_COLORS.length;
                         // If rawtext element, skip content until explicit closing and color that closing with same assigned color
                         if (rawTextElements.has(tagName)) {
                             const closeIdx = text.indexOf(`</${tagName}`, gt + 1);
@@ -220,22 +248,21 @@ function updateDecorations() {
                                 if (closeGt !== -1 && closeGt < seg.end) {
                                     const closeTagText = text.slice(closeIdx, closeGt + 1);
                                     addTagPieces(doc, closeIdx, closeTagText, assigned);
-                                    // pop the rawtext element from stack if it's still on top
+                                    // pop the rawtext element
                                     for (let i = colorStack.length - 1; i >= 0; i--) {
                                         if (colorStack[i].name === tagName) {
                                             colorStack.splice(i);
                                             break;
                                         }
                                     }
+                                    // shrink nextIndexStack to current depth + 1
+                                    nextIndexStack.length = colorStack.length + 1;
                                     pos = closeGt + 1;
-                                    colorIndex = (colorIndex + 1) % RAINBOW_COLORS.length;
                                     continue;
                                 }
                             }
                         }
                     }
-                    // Advance based on the assigned color to avoid duplicate colors when skipping parent color
-                    colorIndex = (assigned + 1) % RAINBOW_COLORS.length;
                     pos = gt + 1;
                     continue;
                 }
@@ -249,17 +276,28 @@ function updateDecorations() {
     for (const d of decorations) {
         activeEditor.setDecorations(d.decorationType, d.ranges);
     }
+    for (const d of delimiterDecorations) {
+        activeEditor.setDecorations(d.decorationType, d.ranges);
+    }
 }
 function addTagPieces(doc, startOffset, tagText, colorIdx) {
-    // Identify indices for '<', optional '/', tag name, optional '/', and '>'
-    const pieces = [];
     if (tagText.length === 0)
         return;
+    const pushDelim = (s, e) => {
+        const start = doc.positionAt(startOffset + s);
+        const end = doc.positionAt(startOffset + e);
+        delimiterDecorations[colorIdx].ranges.push(new vscode.Range(start, end));
+    };
+    const pushName = (s, e) => {
+        const start = doc.positionAt(startOffset + s);
+        const end = doc.positionAt(startOffset + e);
+        decorations[colorIdx].ranges.push(new vscode.Range(start, end));
+    };
     // '<'
-    pieces.push([0, 1]);
+    pushDelim(0, 1);
     // optional '/'
     if (tagText.startsWith('</')) {
-        pieces.push([1, 2]);
+        pushDelim(1, 2);
     }
     // tag name
     const nameMatch = tagText.match(/^<\/?\s*([A-Za-z][A-Za-z0-9:-]*)/);
@@ -267,19 +305,14 @@ function addTagPieces(doc, startOffset, tagText, colorIdx) {
         const nameStartInTag = nameMatch[0].indexOf(nameMatch[1]);
         const nameStart = nameStartInTag;
         const nameEnd = nameStartInTag + nameMatch[1].length;
-        pieces.push([nameStart, nameEnd]);
+        pushName(nameStart, nameEnd);
     }
     // possible self-closing '/'
     if (tagText.endsWith('/>')) {
-        pieces.push([tagText.length - 2, tagText.length - 1]);
+        pushDelim(tagText.length - 2, tagText.length - 1);
     }
     // '>'
-    pieces.push([tagText.length - 1, tagText.length]);
-    for (const [s, e] of pieces) {
-        const start = doc.positionAt(startOffset + s);
-        const end = doc.positionAt(startOffset + e);
-        decorations[colorIdx].ranges.push(new vscode.Range(start, end));
-    }
+    pushDelim(tagText.length - 1, tagText.length);
 }
 function isVoidElement(name) {
     switch (name) {
