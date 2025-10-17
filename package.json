@@ -2,9 +2,14 @@
   "name": "rainbow-html",
   "displayName": "Rainbow HTML",
   "description": "Alternating rainbow colors for HTML tag delimiters and names to enhance complex nested HTML readability.",
-  "version": "0.0.3",
+  "version": "0.0.5",
   "license": "MIT",
   "publisher": "wumbl3",
+  "icon": "icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/realwumbl3/rainbowHTML"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },

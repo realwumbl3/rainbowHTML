@@ -1,6 +1,8 @@
 src/**
 **/*.map
 **/*.ts
+**/*.vsix
+**/*.psd
 
 testbase/**
 
@@ -17,3 +19,4 @@ yarn-error.log*
 !LICENSE*
 
 .mypublish
+
