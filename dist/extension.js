@@ -347,38 +347,13 @@ function getProcessableSegments(doc, full) {
     let i = 0;
     while (i < full.length) {
         if (full[i] === '`') {
-            // Look backwards for an identifier ending with .?html before optional whitespace/comments
-            let k = i - 1;
-            // skip whitespace
-            while (k >= 0 && /\s/.test(full[k]))
-                k--;
-            // skip line comments
-            if (k >= 1 && full[k - 1] === '/' && full[k] === '/') {
-                // unlikely right before backtick, but move back to line start
-                while (k >= 0 && full[k] !== '\n')
-                    k--;
-            }
-            // read last identifier possibly after a dot chain
-            let endWord = k;
-            // move over identifier chars
-            while (endWord >= 0 && /[A-Za-z0-9_$]/.test(full[endWord]))
-                endWord--;
-            // if there's a dot, skip previous identifiers until no more dots
-            let word = full.slice(endWord + 1, k + 1);
-            if (word.length === 0 && full[endWord] === '.') {
-                // try previous word
-                let p = endWord - 1;
-                while (p >= 0 && /[A-Za-z0-9_$\.]/.test(full[p]))
-                    p--;
-                const chain = full.slice(p + 1, k + 1).replace(/\s+/g, '');
-                if (chain.endsWith('.html'))
-                    word = 'html';
-            }
-            if (word === 'html') {
+            if (isHtmlTagBeforeBacktick(full, i)) {
                 const contentStart = i + 1;
                 const end = scanBacktickLiteral(full, contentStart);
                 if (end !== -1) {
                     segments.push({ start: contentStart, end });
+                    // Collect nested html`...` inside ${ ... } expressions within this template
+                    collectNestedHtmlTemplates(full, contentStart, end, segments);
                     i = end + 1;
                     continue;
                 }
@@ -387,6 +362,75 @@ function getProcessableSegments(doc, full) {
         i++;
     }
     return segments;
+}
+function isHtmlTagBeforeBacktick(full, backtickIndex) {
+    // Look backwards for an identifier ending with .?html before optional whitespace/comments
+    let k = backtickIndex - 1;
+    // skip whitespace
+    while (k >= 0 && /\s/.test(full[k]))
+        k--;
+    // skip line comments
+    if (k >= 1 && full[k - 1] === '/' && full[k] === '/') {
+        // move back to line start
+        while (k >= 0 && full[k] !== '\n')
+            k--;
+    }
+    // read last identifier possibly after a dot chain
+    let endWord = k;
+    while (endWord >= 0 && /[A-Za-z0-9_$]/.test(full[endWord]))
+        endWord--;
+    let word = full.slice(endWord + 1, k + 1);
+    if (word.length === 0 && full[endWord] === '.') {
+        // try previous identifiers in a dotted chain
+        let p = endWord - 1;
+        while (p >= 0 && /[A-Za-z0-9_$\.]/.test(full[p]))
+            p--;
+        const chain = full.slice(p + 1, k + 1).replace(/\s+/g, '');
+        if (chain.endsWith('.html'))
+            word = 'html';
+    }
+    return word === 'html';
+}
+function collectNestedHtmlTemplates(full, start, end, out) {
+    // Scan template content for ${ ... } expressions and within them for nested html`...`
+    let j = start;
+    while (j < end) {
+        const next2 = full.slice(j, j + 2);
+        if (next2 === '${') {
+            const exprStart = j + 2;
+            const exprEnd = scanTemplateExpr(full, exprStart, end);
+            if (exprEnd === -1)
+                return;
+            scanRangeForHtmlTemplates(full, exprStart, exprEnd, out);
+            j = exprEnd;
+            continue;
+        }
+        // handle escaped backtick inside content
+        if (full[j] === '\\' && j + 1 < end) {
+            j += 2;
+            continue;
+        }
+        j++;
+    }
+}
+function scanRangeForHtmlTemplates(full, start, end, out) {
+    let k = start;
+    while (k < end) {
+        if (full[k] === '`') {
+            if (isHtmlTagBeforeBacktick(full, k)) {
+                const innerStart = k + 1;
+                const innerEnd = scanBacktickLiteral(full, innerStart);
+                if (innerEnd !== -1 && innerEnd <= full.length) {
+                    out.push({ start: innerStart, end: innerEnd });
+                    // Recurse for nested html inside this template's expressions
+                    collectNestedHtmlTemplates(full, innerStart, innerEnd, out);
+                    k = innerEnd + 1;
+                    continue;
+                }
+            }
+        }
+        k++;
+    }
 }
 function nextDifferentColor(startIndex, forbiddenIndex) {
     if (forbiddenIndex === null)
@@ -499,6 +543,28 @@ function scanTemplateExpr(text, startPos, hardEnd) {
             continue;
         }
         if (!(inSingle || inDouble || inBacktick)) {
+            // Handle comments
+            if (next2 === '//') {
+                // Skip single-line comment
+                i += 2;
+                while (i < hardEnd && text[i] !== '\n')
+                    i++;
+                if (i < hardEnd)
+                    i++; // skip the newline
+                continue;
+            }
+            if (next2 === '/*') {
+                // Skip multi-line comment
+                i += 2;
+                while (i < hardEnd - 1) {
+                    if (text.slice(i, i + 2) === '*/') {
+                        i += 2;
+                        break;
+                    }
+                    i++;
+                }
+                continue;
+            }
             if (next2 === '${') {
                 braceDepth++;
                 i += 2;
