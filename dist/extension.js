@@ -98,7 +98,8 @@ function initDecorations() {
     delimiterDecorations = RAINBOW_COLORS.map(color => ({
         decorationType: vscode.window.createTextEditorDecorationType({
             color,
-            opacity: '0.70',
+            // Increase opacity for delimiters so they match tag name intensity
+            opacity: '1.0',
             rangeBehavior: vscode.DecorationRangeBehavior.ClosedClosed
         }),
         ranges: []
@@ -148,7 +149,6 @@ function updateDecorations() {
     // Lightweight scanner that pairs tags so opening/closing share the same color
     const rawTextElements = new Set(['script', 'style']);
     // Track assigned color per open element and the next color to use per depth.
-    // nextIndexStack[depth] = next color index to try for the next sibling at that depth.
     const colorStack = [];
     const nextIndexStack = [0];
     for (const seg of segments) {
@@ -188,6 +188,16 @@ function updateDecorations() {
                 continue;
             }
             if (text.charCodeAt(pos) === 60 /* '<' */) {
+                // Specific check for TypeScript: if the '<' is immediately preceded by an alphanumeric character,
+                // it's likely a generic type (e.g., RefObject<T>) or a comparison, not an HTML tag.
+                const isTypeScript = doc.languageId === 'typescript' || doc.languageId === 'typescriptreact';
+                if (isTypeScript && pos > 0) {
+                    const charBefore = text[pos - 1];
+                    if (/[a-zA-Z0-9]/.test(charBefore)) {
+                        pos++;
+                        continue;
+                    }
+                }
                 // Try to parse a tag
                 const gt = findTagEnd(text, pos + 1, seg.end);
                 if (gt === -1 || gt >= seg.end) {
@@ -200,20 +210,20 @@ function updateDecorations() {
                     pos = gt + 1;
                     continue;
                 }
-                // Extract tag name
+                // Extract tag name (allowing dots for Component.SubComponent)
                 const isClosing = tagText.startsWith('</');
-                const nameMatch = tagText.match(/^<\/?\s*([A-Za-z][A-Za-z0-9:-]*)/);
+                const nameMatch = tagText.match(/^<\/?\s*([A-Za-z][A-Za-z0-9:.-]*)/);
                 if (!nameMatch) {
                     pos = gt + 1;
                     continue;
                 }
                 const tagName = nameMatch[1].toLowerCase();
-                const isSelfClosingSyntax = tagText.endsWith('/>');
+                const isSelfClosingSyntax = tagText.trim().endsWith('/>');
                 const isVoid = isVoidElement(tagName);
                 const isSelfClosing = isSelfClosingSyntax || isVoid;
                 if (isClosing) {
                     // Match closing with the nearest same-name opening to get its color
-                    let matchedColor = nextIndexStack[Math.max(0, colorStack.length)] ?? 0; // fallback
+                    let matchedColor = nextIndexStack[Math.max(0, colorStack.length)] ?? 0;
                     for (let i = colorStack.length - 1; i >= 0; i--) {
                         if (colorStack[i].name === tagName) {
                             matchedColor = colorStack[i].colorIndex;
@@ -221,26 +231,22 @@ function updateDecorations() {
                             break;
                         }
                     }
-                    // After popping, ensure depth-aligned next color stack length
                     nextIndexStack.length = colorStack.length + 1;
                     addTagPieces(doc, pos, tagText, matchedColor);
                     pos = gt + 1;
                     continue;
                 }
                 else {
-                    // Assign a color based on the next index at this depth, avoiding parent's color
+                    // Assign a color based on the next index at this depth
                     const depth = colorStack.length;
                     const parentColor = depth > 0 ? colorStack[depth - 1].colorIndex : null;
                     const startIndex = nextIndexStack[depth] ?? 0;
                     const assigned = nextDifferentColor(startIndex, parentColor);
                     addTagPieces(doc, pos, tagText, assigned);
-                    // Update next color for this depth (next sibling) and prepare child depth baseline
                     nextIndexStack[depth] = (assigned + 1) % RAINBOW_COLORS.length;
                     if (!isSelfClosing) {
                         colorStack.push({ name: tagName, colorIndex: assigned });
-                        // Ensure child depth starts from parent's next (skipping parent's color)
                         nextIndexStack[depth + 1] = (assigned + 1) % RAINBOW_COLORS.length;
-                        // If rawtext element, skip content until explicit closing and color that closing with same assigned color
                         if (rawTextElements.has(tagName)) {
                             const closeIdx = text.indexOf(`</${tagName}`, gt + 1);
                             if (closeIdx !== -1 && closeIdx < seg.end) {
@@ -248,14 +254,12 @@ function updateDecorations() {
                                 if (closeGt !== -1 && closeGt < seg.end) {
                                     const closeTagText = text.slice(closeIdx, closeGt + 1);
                                     addTagPieces(doc, closeIdx, closeTagText, assigned);
-                                    // pop the rawtext element
                                     for (let i = colorStack.length - 1; i >= 0; i--) {
                                         if (colorStack[i].name === tagName) {
                                             colorStack.splice(i);
                                             break;
                                         }
                                     }
-                                    // shrink nextIndexStack to current depth + 1
                                     nextIndexStack.length = colorStack.length + 1;
                                     pos = closeGt + 1;
                                     continue;
@@ -295,21 +299,26 @@ function addTagPieces(doc, startOffset, tagText, colorIdx) {
     };
     // '<'
     pushDelim(0, 1);
-    // optional '/'
+    // optional '/' for </tag
     if (tagText.startsWith('</')) {
         pushDelim(1, 2);
     }
     // tag name
-    const nameMatch = tagText.match(/^<\/?\s*([A-Za-z][A-Za-z0-9:-]*)/);
+    const nameMatch = tagText.match(/^<\/?\s*([A-Za-z][A-Za-z0-9:.-]*)/);
     if (nameMatch && nameMatch.index !== undefined) {
         const nameStartInTag = nameMatch[0].indexOf(nameMatch[1]);
         const nameStart = nameStartInTag;
         const nameEnd = nameStartInTag + nameMatch[1].length;
         pushName(nameStart, nameEnd);
     }
-    // possible self-closing '/'
-    if (tagText.endsWith('/>')) {
-        pushDelim(tagText.length - 2, tagText.length - 1);
+    // self-closing '/>' - find the last '/' before the final '>'
+    const trimmed = tagText.trim();
+    if (trimmed.endsWith('/>')) {
+        const lastGt = tagText.lastIndexOf('>');
+        const slashPos = tagText.lastIndexOf('/', lastGt);
+        if (slashPos !== -1 && slashPos === lastGt - 1) {
+            pushDelim(slashPos, lastGt);
+        }
     }
     // '>'
     pushDelim(tagText.length - 1, tagText.length);
@@ -443,55 +452,70 @@ function nextDifferentColor(startIndex, forbiddenIndex) {
 }
 function findTagEnd(text, startPos, hardEnd) {
     // Find '>' but treat `>` inside attribute values as text.
-    // Handle quotes ' and " and also template placeholders like ${ ... } inside attribute values of html templates.
+    // Handle quotes ' and " and also template placeholders like ${ ... } inside attribute values.
+    // ALSO handle TSX expressions { ... } which might contain operators like > or strings.
     let i = startPos;
     let inSingle = false;
     let inDouble = false;
-    let exprBraceDepth = 0;
+    let inBacktick = false;
+    let braceDepth = 0; // Track { } for TSX expressions
     while (i < hardEnd) {
         const ch = text[i];
         const next2 = text.slice(i, i + 2);
-        if (exprBraceDepth === 0) {
-            // Enter/exit quotes, with escape handling
-            if (!inDouble && ch === "'" && !inSingle) {
-                inSingle = true;
-                i++;
-                continue;
-            }
-            if (inSingle && ch === "'") {
-                inSingle = false;
-                i++;
-                continue;
-            }
-            if (!inSingle && ch === '"' && !inDouble) {
-                inDouble = true;
-                i++;
-                continue;
-            }
-            if (inDouble && ch === '"') {
-                inDouble = false;
-                i++;
-                continue;
-            }
-            if ((inSingle || inDouble) && ch === '\\' && i + 1 < hardEnd) {
+        if (inSingle || inDouble || inBacktick) {
+            if (ch === '\\' && i + 1 < hardEnd) {
                 i += 2;
                 continue;
             }
-            // Enter template expression both inside or outside quotes
-            if (next2 === '${') {
-                const res = scanTemplateExpr(text, i + 2, hardEnd);
-                if (res === -1)
-                    return -1;
-                i = res;
-                continue;
-            }
-            // End of tag when not inside quotes or expressions
-            if (ch === '>' && !inSingle && !inDouble)
-                return i;
+            if (inSingle && ch === "'")
+                inSingle = false;
+            else if (inDouble && ch === '"')
+                inDouble = false;
+            else if (inBacktick && ch === '`')
+                inBacktick = false;
             i++;
             continue;
         }
-        // Should never reach here since scanTemplateExpr consumes fully
+        // Enter strings
+        if (ch === "'") {
+            inSingle = true;
+            i++;
+            continue;
+        }
+        if (ch === '"') {
+            inDouble = true;
+            i++;
+            continue;
+        }
+        if (ch === '`') {
+            inBacktick = true;
+            i++;
+            continue;
+        }
+        // TSX expressions
+        if (ch === '{') {
+            braceDepth++;
+            i++;
+            continue;
+        }
+        if (ch === '}') {
+            if (braceDepth > 0)
+                braceDepth--;
+            i++;
+            continue;
+        }
+        // Handle template expressions ${...} if we are somehow scanning inside a backtick literal's tag attributes
+        if (next2 === '${') {
+            const res = scanTemplateExpr(text, i + 2, hardEnd);
+            if (res === -1)
+                return -1;
+            i = res;
+            continue;
+        }
+        // End of tag
+        if (ch === '>' && braceDepth === 0) {
+            return i;
+        }
         i++;
     }
     return -1;

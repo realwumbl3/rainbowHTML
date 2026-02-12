@@ -1,4 +1,18 @@
-export default function Test() {
+type ExampleProps = {
+    canvasRef: React.RefObject<HTMLDivElement>
+    panTargetRef: React.RefObject<HTMLDivElement>
+    maskCanvasRef: React.RefObject<HTMLCanvasElement>
+    overlayCanvasRef?: React.RefObject<HTMLCanvasElement>
+    imageRef: React.RefObject<HTMLImageElement>
+}
+
+export default function Test({
+    canvasRef,
+    panTargetRef,
+    maskCanvasRef,
+    overlayCanvasRef,
+    imageRef
+}: ExampleProps) {
     return (
         <main>
             <div id="parent">
