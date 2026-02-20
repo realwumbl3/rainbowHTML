@@ -1,0 +1,11 @@
+<div>
+  <ul>
+    {% for user in users %}
+      <li>
+        <a href="{{ user.url }}">
+          <span>{{ user.name }}</span>
+        </a>
+      </li>
+    {% endfor %}
+  </ul>
+</div>

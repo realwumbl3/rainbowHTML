@@ -1,0 +1,10 @@
+{
+    "rainbow-html.additionalFileTypes": [
+        "njk",
+        "nunjucks",
+        "php",
+        "vue",
+        "svelte",
+        "astro"
+    ]
+}

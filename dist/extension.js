@@ -72,6 +72,15 @@ function activate(context) {
         }
     }), vscode.workspace.onDidCloseTextDocument(() => {
         clearAllDecorations();
+    }), vscode.workspace.onDidChangeConfiguration(e => {
+        if (e.affectsConfiguration('rainbow-html.additionalFileTypes')) {
+            if (activeEditor && shouldProcessDoc(activeEditor.document)) {
+                triggerUpdateDecorations();
+            }
+            else {
+                clearAllDecorations();
+            }
+        }
     }), vscode.commands.registerCommand('rainbow-html.refresh', () => triggerUpdateDecorations()));
 }
 function deactivate() {
@@ -80,11 +89,21 @@ function deactivate() {
 function shouldProcessDoc(doc) {
     if (doc.languageId === 'html' || doc.fileName.endsWith('.html') || doc.fileName.endsWith('.htm'))
         return true;
-    // Support JS/TS and React variants to handle html`...` tagged templates
-    return (doc.languageId === 'javascript' ||
+    if (doc.languageId === 'javascript' ||
         doc.languageId === 'typescript' ||
         doc.languageId === 'javascriptreact' ||
-        doc.languageId === 'typescriptreact');
+        doc.languageId === 'typescriptreact')
+        return true;
+    const config = vscode.workspace.getConfiguration('rainbow-html');
+    const additionalTypes = config.get('additionalFileTypes') || [];
+    for (const type of additionalTypes) {
+        if (doc.languageId === type)
+            return true;
+        const suffix = type.startsWith('.') ? type : '.' + type;
+        if (doc.fileName.endsWith(suffix) || doc.fileName.endsWith(type))
+            return true;
+    }
+    return false;
 }
 function initDecorations() {
     disposeDecorations();
@@ -347,6 +366,15 @@ function isVoidElement(name) {
 function getProcessableSegments(doc, full) {
     if (doc.languageId === 'html') {
         return [{ start: 0, end: full.length }];
+    }
+    const config = vscode.workspace.getConfiguration('rainbow-html');
+    const additionalTypes = config.get('additionalFileTypes') || [];
+    for (const type of additionalTypes) {
+        if (doc.languageId === type)
+            return [{ start: 0, end: full.length }];
+        const suffix = type.startsWith('.') ? type : '.' + type;
+        if (doc.fileName.endsWith(suffix) || doc.fileName.endsWith(type))
+            return [{ start: 0, end: full.length }];
     }
     if (doc.languageId === 'javascriptreact' || doc.languageId === 'typescriptreact') {
         // For JSX/TSX, process the entire document buffer

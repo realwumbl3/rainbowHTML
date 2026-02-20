@@ -2,7 +2,7 @@
   "name": "rainbow-html",
   "displayName": "Rainbow HTML",
   "description": "Alternating rainbow colors for HTML tag delimiters and names to enhance complex nested HTML readability.",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "license": "MIT",
   "publisher": "wumbl3",
   "icon": "icon.png",
@@ -27,6 +27,26 @@
   ],
   "main": "dist/extension.js",
   "contributes": {
+    "configuration": {
+      "title": "Rainbow HTML",
+      "properties": {
+        "rainbow-html.additionalFileTypes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "njk",
+            "nunjucks",
+            "php",
+            "vue",
+            "svelte",
+            "astro"
+          ],
+          "description": "Additional file extensions (e.g., 'njk') or language IDs (e.g., 'nunjucks') to scan for HTML tags."
+        }
+      }
+    },
     "commands": [
       {
         "command": "rainbow-html.refresh",

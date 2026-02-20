@@ -5,36 +5,56 @@
     <img align="center" src="./screen.png" alt="Rainbow HTML Screenshot" width="512"/>
 </div>
 
-## Features
+## ✨ Features
 
--   Colors only `<`, `>`, optional `/`, and the tag name of each HTML element
--   Alternates through 6 rainbow colors (red, orange, yellow, green, blue, violet)
--   Works live as you type
--   Skips comments, doctype, and rawtext content (`<script>`, `<style>`) while still coloring their tags
+- **Focused Syntax Highlighting**: Colors only `<`, `>`, optional `/`, and the tag name of each HTML element, leaving your theme's attribute and string colors undisturbed.
+- **Alternating Rainbow Colors**: Cycles through 6 distinct rainbow colors (red, orange, yellow, green, blue, violet) for varying nested depths.
+- **Live Updates**: Works instantly as you type to provide real-time structural feedback and readability.
+- **Smart Parsing**: Intelligently pairs closing tags with opening tags to keep colors aligned across the same tree depth, and safely skips HTML comments, doctypes, and raw text content (like `<script>` and `<style>`) while still highlighting their outer tags.
+- **Customizable File Types**: Expand functionality by adding your favorite templating languages (like Nunjucks, PHP, Svelte, Vue, Astro) to enjoy Rainbow HTML highlighting across your entire stack.
 
-## Supported languages
+## 💻 Supported Languages
 
--   `html`
--   `javascript`, `typescript` (limited: scans html`...` tagged template literals)
--   `javascriptreact` (JSX), `typescriptreact` (TSX)
+Out of the box, Rainbow HTML explicitly supports and highlights the following languages:
 
-## Command
+- **Web Core**: `html`, `.html`, `.htm`
+- **React Ecosystem**: `javascriptreact` (JSX) and `typescriptreact` (TSX)
+- **Vanilla JS/TS**: `javascript` and `typescript` (It intelligently scans for and highlights `html` tagged template literals, e.g., `html\`<div>...</div>\``)
 
--   `Rainbow HTML: Refresh` (`rainbow-html.refresh`) — recompute decorations for the active editor
+Thanks to the new versatile extension configuration, standard web templates and frameworks are pre-configured in the `additionalFileTypes` setting:
+- **Default Additional Types**: `njk`, `nunjucks`, `php`, `vue`, `svelte`, `astro`.
 
-## Installation
+## ⚙️ Configuration Settings
 
--   Open VSX: search for `wumbl3.rainbow-html` in compatible editors (e.g., VS Code OSS, VSCodium)
--   VS Code Marketplace: search for `Rainbow HTML` by `wumbl3` (when published)
+You can fully customize the extension via your VS Code `settings.json` or the graphical Settings UI under **Rainbow HTML**.
 
-## Development
+- `rainbow-html.additionalFileTypes`: *(Array of Strings)*  
+  A list of additional file extensions (e.g., `njk`) or VS Code language IDs (e.g., `nunjucks`) to actively scan for HTML tags.  
+  *Default:* `["njk", "nunjucks", "php", "vue", "svelte", "astro"]`
+
+## ⌨️ Commands
+
+- `Rainbow HTML: Refresh` (`rainbow-html.refresh`)  
+  Force the extension to immediately recompute and reapply syntax decorations for the currently active editor window.
+
+## 🚀 Installation
+
+### VS Code Marketplace
+Search for **Rainbow HTML** via the Extensions pane in Visual Studio Code (publisher: `wumbl3`).
+
+### Open VSX (VSCodium)
+Search for `wumbl3.rainbow-html` in compatible editors like VSCodium or VS Code OSS.
+
+## 🛠️ Development
+
+To build and run the extension locally:
 
 ```bash
 npm install
 npm run watch
-# Press F5 in VS Code to run the Extension Development Host
+# Press F5 in VS Code to run the Extension Development Host debugger
 ```
 
-## License
+## 📝 License
 
-MIT
+Released under the MIT License.
